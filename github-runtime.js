@@ -1,0 +1,456 @@
+(() => {
+  'use strict';
+
+  const config = window.WEB2APK_CONFIG || {};
+  const encoder = new TextEncoder();
+  let token = '';
+  let user = null;
+  let authPromise = null;
+  let authResolve = null;
+  let authReject = null;
+
+  const $ = selector => document.querySelector(selector);
+  const repoPath = () => `/repos/${encodeURIComponent(config.owner)}/${encodeURIComponent(config.repository)}`;
+
+  class GitHubError extends Error {
+    constructor(message, status = 0, details = null) {
+      super(message);
+      this.name = 'GitHubError';
+      this.status = status;
+      this.details = details;
+    }
+  }
+
+  async function request(path, options = {}) {
+    if (!token) throw new GitHubError('يجب ربط GitHub أولاً', 401);
+    const url = path.startsWith('http') ? path : `https://api.github.com${path}`;
+    const headers = new Headers(options.headers || {});
+    headers.set('Accept', options.accept || 'application/vnd.github+json');
+    headers.set('Authorization', `Bearer ${token}`);
+    headers.set('X-GitHub-Api-Version', config.apiVersion || '2026-03-10');
+    if (options.json !== undefined) {
+      headers.set('Content-Type', 'application/json');
+      options.body = JSON.stringify(options.json);
+    }
+    let response;
+    try {
+      response = await fetch(url, { ...options, headers, cache: 'no-store' });
+    } catch (error) {
+      throw new GitHubError('تعذر الاتصال بـ GitHub. تحقق من الإنترنت وسياسة المتصفح.', 0, error);
+    }
+    if (!response.ok) {
+      let detail = '';
+      try {
+        const body = await response.json();
+        detail = body.message || JSON.stringify(body);
+      } catch (_) { detail = await response.text().catch(() => ''); }
+      const friendly = response.status === 401
+        ? 'Token غير صالح أو انتهت صلاحيته.'
+        : response.status === 403
+          ? 'لا يملك Token الصلاحيات المطلوبة للمستودع أو GitHub Actions.'
+          : response.status === 404
+            ? 'المستودع أو Workflow غير موجود، أو Token لا يستطيع الوصول إليه.'
+            : `أعاد GitHub الخطأ ${response.status}: ${detail}`;
+      throw new GitHubError(friendly, response.status, detail);
+    }
+    if (options.raw) return response;
+    if (response.status === 204) return null;
+    const contentType = response.headers.get('content-type') || '';
+    return contentType.includes('json') ? response.json() : response.text();
+  }
+
+  function setConnected(connected) {
+    const button = $('#githubConnect');
+    if (!button) return;
+    button.classList.toggle('connected', connected);
+    const label = button.querySelector('span');
+    if (label) label.textContent = connected ? (user?.login || 'متصل') : 'ربط GitHub';
+    button.title = connected ? `متصل بالحساب ${user?.login || ''} — اضغط لقطع الاتصال` : 'ربط مستودع GitHub الخاص';
+  }
+
+  function closeAuth() {
+    $('#githubAuthModal')?.classList.add('hidden');
+    const field = $('#githubToken');
+    if (field) field.value = '';
+  }
+
+  async function connectWithToken(value) {
+    const nextToken = String(value || '').trim();
+    if (!/^(github_pat_|ghp_|gho_|ghu_)[A-Za-z0-9_]+$/.test(nextToken)) {
+      throw new GitHubError('صيغة Token غير صحيحة. استخدم Fine-grained Personal Access Token.');
+    }
+    token = nextToken;
+    try {
+      user = await request('/user');
+      const repository = await request(repoPath());
+      if (!repository.private) console.warn('Builder repository is public; private is recommended.');
+      await request(`${repoPath()}/actions/workflows/${encodeURIComponent(config.workflow)}`);
+      setConnected(true);
+      return user;
+    } catch (error) {
+      token = '';
+      user = null;
+      setConnected(false);
+      throw error;
+    }
+  }
+
+  function ensureAuth() {
+    if (token && user) return Promise.resolve(user);
+    if (authPromise) return authPromise;
+    $('#authError')?.classList.add('hidden');
+    $('#githubAuthModal')?.classList.remove('hidden');
+    setTimeout(() => $('#githubToken')?.focus(), 100);
+    authPromise = new Promise((resolve, reject) => { authResolve = resolve; authReject = reject; });
+    return authPromise.finally(() => {
+      authPromise = null;
+      authResolve = null;
+      authReject = null;
+    });
+  }
+
+  function disconnect() {
+    token = '';
+    user = null;
+    setConnected(false);
+  }
+
+  function bindAuthUi() {
+    $('#githubConnect')?.addEventListener('click', async () => {
+      if (token) {
+        if (confirm('هل تريد قطع اتصال GitHub وحذف Token من ذاكرة الصفحة؟')) disconnect();
+        return;
+      }
+      ensureAuth().catch(() => {});
+    });
+    $('#authClose')?.addEventListener('click', () => {
+      closeAuth();
+      authReject?.(new GitHubError('تم إلغاء ربط GitHub'));
+    });
+    $('#authSubmit')?.addEventListener('click', async () => {
+      const button = $('#authSubmit');
+      const errorBox = $('#authError');
+      button.disabled = true;
+      errorBox.classList.add('hidden');
+      try {
+        const result = await connectWithToken($('#githubToken').value);
+        closeAuth();
+        authResolve?.(result);
+      } catch (error) {
+        errorBox.textContent = error.message;
+        errorBox.classList.remove('hidden');
+      } finally { button.disabled = false; }
+    });
+    $('#githubToken')?.addEventListener('keydown', event => {
+      if (event.key === 'Enter') $('#authSubmit')?.click();
+    });
+  }
+
+  // Minimal standards-compliant ZIP writer (store method) to avoid external CDN dependencies.
+  const crcTable = (() => {
+    const table = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) {
+      let c = n;
+      for (let k = 0; k < 8; k++) c = (c & 1) ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+      table[n] = c >>> 0;
+    }
+    return table;
+  })();
+
+  function crc32(bytes) {
+    let crc = 0xffffffff;
+    for (let i = 0; i < bytes.length; i++) crc = crcTable[(crc ^ bytes[i]) & 0xff] ^ (crc >>> 8);
+    return (crc ^ 0xffffffff) >>> 0;
+  }
+
+  function zipDate(date = new Date()) {
+    const year = Math.max(1980, date.getFullYear());
+    return {
+      time: (date.getHours() << 11) | (date.getMinutes() << 5) | Math.floor(date.getSeconds() / 2),
+      date: ((year - 1980) << 9) | ((date.getMonth() + 1) << 5) | date.getDate()
+    };
+  }
+
+  function write16(view, offset, value) { view.setUint16(offset, value, true); }
+  function write32(view, offset, value) { view.setUint32(offset, value >>> 0, true); }
+  function joinBytes(parts) {
+    const length = parts.reduce((sum, part) => sum + part.length, 0);
+    const output = new Uint8Array(length);
+    let offset = 0;
+    for (const part of parts) { output.set(part, offset); offset += part.length; }
+    return output;
+  }
+
+  async function createZip(entries) {
+    const locals = [];
+    const centrals = [];
+    let offset = 0;
+    const stamp = zipDate();
+    for (const entry of entries) {
+      const name = encoder.encode(entry.name.replace(/^\/+/, ''));
+      const data = entry.data instanceof Uint8Array ? entry.data : new Uint8Array(await entry.data.arrayBuffer());
+      const crc = crc32(data);
+      const local = new Uint8Array(30 + name.length);
+      const lv = new DataView(local.buffer);
+      write32(lv, 0, 0x04034b50); write16(lv, 4, 20); write16(lv, 6, 0x0800); write16(lv, 8, 0);
+      write16(lv, 10, stamp.time); write16(lv, 12, stamp.date); write32(lv, 14, crc);
+      write32(lv, 18, data.length); write32(lv, 22, data.length); write16(lv, 26, name.length); write16(lv, 28, 0);
+      local.set(name, 30);
+      locals.push(local, data);
+
+      const central = new Uint8Array(46 + name.length);
+      const cv = new DataView(central.buffer);
+      write32(cv, 0, 0x02014b50); write16(cv, 4, 0x0314); write16(cv, 6, 20); write16(cv, 8, 0x0800);
+      write16(cv, 10, 0); write16(cv, 12, stamp.time); write16(cv, 14, stamp.date); write32(cv, 16, crc);
+      write32(cv, 20, data.length); write32(cv, 24, data.length); write16(cv, 28, name.length);
+      write16(cv, 30, 0); write16(cv, 32, 0); write16(cv, 34, 0); write16(cv, 36, 0); write32(cv, 38, 0); write32(cv, 42, offset);
+      central.set(name, 46);
+      centrals.push(central);
+      offset += local.length + data.length;
+    }
+    const centralBytes = joinBytes(centrals);
+    const end = new Uint8Array(22);
+    const ev = new DataView(end.buffer);
+    write32(ev, 0, 0x06054b50); write16(ev, 4, 0); write16(ev, 6, 0); write16(ev, 8, entries.length);
+    write16(ev, 10, entries.length); write32(ev, 12, centralBytes.length); write32(ev, 16, offset); write16(ev, 20, 0);
+    return new Blob([...locals, centralBytes, end], { type: 'application/zip' });
+  }
+
+  function extension(file) {
+    const match = String(file?.name || '').toLowerCase().match(/\.(png|jpe?g|webp)$/);
+    return match ? (match[1] === 'jpeg' ? '.jpg' : `.${match[1]}`) : '.png';
+  }
+
+  function asBool(value) { return String(value).toLowerCase() === 'true'; }
+  function projectStore() {
+    try { return JSON.parse(localStorage.getItem('web2apk.projects') || '{}'); } catch (_) { return {}; }
+  }
+
+  async function buildBundle(formData, priorProject) {
+    const sourceType = formData.get('sourceType');
+    const sourceFile = formData.get('sourceZip');
+    const icon = formData.get('icon');
+    const splash = formData.get('splash');
+    const appName = formData.get('appName');
+    const packageName = formData.get('packageName');
+    const projectId = priorProject?.id || crypto.randomUUID();
+    const projectToken = priorProject?.token || crypto.randomUUID();
+    const buildId = crypto.randomUUID();
+    const iconName = icon instanceof File && icon.size ? `icon${extension(icon)}` : null;
+    const splashName = splash instanceof File && splash.size ? `splash${extension(splash)}` : null;
+    const permissions = JSON.parse(formData.get('permissions') || '[]');
+    const permissionMap = {
+      camera:['android.permission.CAMERA'], microphone:['android.permission.RECORD_AUDIO'],
+      location:['android.permission.ACCESS_COARSE_LOCATION','android.permission.ACCESS_FINE_LOCATION'],
+      notifications:['android.permission.POST_NOTIFICATIONS'],
+      bluetooth:['android.permission.BLUETOOTH_SCAN','android.permission.BLUETOOTH_CONNECT'],
+      contacts:['android.permission.READ_CONTACTS'], phone:['android.permission.CALL_PHONE'],
+      vibrate:['android.permission.VIBRATE'], mediaImages:['android.permission.READ_MEDIA_IMAGES'],
+      mediaVideo:['android.permission.READ_MEDIA_VIDEO'], mediaAudio:['android.permission.READ_MEDIA_AUDIO']
+    };
+    const androidPermissions = new Set(['android.permission.INTERNET','android.permission.ACCESS_NETWORK_STATE']);
+    permissions.forEach(key => (permissionMap[key] || []).forEach(value => androidPermissions.add(value)));
+    const jobConfig = {
+      schemaVersion: 2, runtime: 'github-pages', buildId, projectId,
+      source: { type: sourceType, url: sourceType === 'url' ? formData.get('url') : '', zip: sourceType === 'zip' ? 'source.zip' : null },
+      app: {
+        name: appName, packageName, versionName: formData.get('versionName'), versionCode: Number(formData.get('versionCode')),
+        minSdk: 29, compileSdk: 37, targetSdk: Number(formData.get('targetSdk')), orientation: formData.get('orientation')
+      },
+      design: {
+        primaryColor: formData.get('primaryColor'), backgroundColor: formData.get('backgroundColor'),
+        statusBarColor: formData.get('statusBarColor'), icon: iconName, splash: splashName
+      },
+      features: {
+        permissions: [...androidPermissions], allowCleartext: asBool(formData.get('allowCleartext')),
+        allowFileNetwork: asBool(formData.get('allowFileNetwork')), externalLinks: asBool(formData.get('externalLinks'))
+      },
+      signing: { keyAlias: 'web2apk', strategy: 'github-secret-vault' }
+    };
+    const entries = [{ name: 'config.json', data: encoder.encode(JSON.stringify(jobConfig, null, 2)) }];
+    if (sourceType === 'zip') entries.push({ name: 'source.zip', data: sourceFile });
+    if (iconName) entries.push({ name: iconName, data: icon });
+    if (splashName) entries.push({ name: splashName, data: splash });
+    const bundle = await createZip(entries);
+    if (bundle.size > (config.maxBundleMb || 95) * 1024 * 1024) {
+      throw new GitHubError(`حزمة البناء أكبر من ${config.maxBundleMb || 95}MB. قلل حجم ZIP أو الصور.`);
+    }
+    return { bundle, jobConfig, buildId, projectId, projectToken, appName, packageName };
+  }
+
+  async function createInputRelease(job) {
+    return request(`${repoPath()}/releases`, {
+      method: 'POST',
+      json: {
+        tag_name: `job-${job.buildId}`,
+        target_commitish: config.branch || 'main',
+        name: `Input ${job.buildId}`,
+        body: 'Private temporary Web2APK input. It is deleted automatically after the workflow.',
+        draft: true,
+        prerelease: true
+      }
+    });
+  }
+
+  async function uploadBundle(release, bundle) {
+    const uploadUrl = release.upload_url.replace(/\{.*$/, '') + '?name=bundle.zip';
+    return request(uploadUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/zip' },
+      accept: 'application/vnd.github+json',
+      body: bundle
+    });
+  }
+
+  function saveJob(job) {
+    const jobs = JSON.parse(localStorage.getItem('web2apk.pages.jobs') || '{}');
+    jobs[job.id] = job;
+    const keys = Object.keys(jobs).sort((a, b) => (jobs[b].createdAt || 0) - (jobs[a].createdAt || 0));
+    keys.slice(20).forEach(key => delete jobs[key]);
+    localStorage.setItem('web2apk.pages.jobs', JSON.stringify(jobs));
+  }
+
+  function loadJob(id) {
+    try { return JSON.parse(localStorage.getItem('web2apk.pages.jobs') || '{}')[id] || null; } catch (_) { return null; }
+  }
+
+  async function createBuild(formData, priorProject) {
+    await ensureAuth();
+    const built = await buildBundle(formData, priorProject);
+    let inputRelease;
+    try {
+      inputRelease = await createInputRelease(built);
+      const asset = await uploadBundle(inputRelease, built.bundle);
+      const response = await request(`${repoPath()}/actions/workflows/${encodeURIComponent(config.workflow)}/dispatches`, {
+        method: 'POST',
+        json: {
+          ref: config.branch || 'main',
+          inputs: {
+            build_id: built.buildId,
+            job_release_id: String(inputRelease.id),
+            job_asset_id: String(asset.id)
+          }
+        },
+        raw: true
+      });
+      let dispatch = null;
+      if (response.status !== 204) dispatch = await response.json().catch(() => null);
+      const record = {
+        id: built.buildId, projectId: built.projectId, projectToken: built.projectToken,
+        appName: built.appName, packageName: built.packageName, runId: dispatch?.workflow_run_id || dispatch?.run_id || null,
+        inputReleaseId: inputRelease.id, createdAt: Date.now(), status: 'queued'
+      };
+      saveJob(record);
+      const projects = projectStore();
+      projects[built.packageName] = { id: built.projectId, token: built.projectToken, savedAt: Date.now() };
+      localStorage.setItem('web2apk.projects', JSON.stringify(projects));
+      return {
+        ...record, status: 'queued', progress: 9, stage: 'تم رفع الحزمة الخاصة وتشغيل GitHub Actions',
+        accessToken: '', links: {}, createdAt: Math.floor(record.createdAt / 1000), updatedAt: Math.floor(Date.now() / 1000)
+      };
+    } catch (error) {
+      if (inputRelease?.id) request(`${repoPath()}/releases/${inputRelease.id}`, { method: 'DELETE' }).catch(() => {});
+      throw error;
+    }
+  }
+
+  async function findRun(buildId) {
+    const result = await request(`${repoPath()}/actions/workflows/${encodeURIComponent(config.workflow)}/runs?event=workflow_dispatch&per_page=30`);
+    return (result.workflow_runs || []).find(run => String(run.display_title || '').includes(buildId)) || null;
+  }
+
+  async function runStage(run) {
+    if (run.status === 'queued' || run.status === 'waiting' || run.status === 'pending') return { progress: 14, stage: 'الطلب في قائمة انتظار GitHub Actions' };
+    if (run.status !== 'in_progress') return { progress: 96, stage: 'انتهت خطوات GitHub Actions' };
+    try {
+      const result = await request(`${repoPath()}/actions/runs/${run.id}/jobs`);
+      const steps = result.jobs?.[0]?.steps || [];
+      const current = steps.find(step => step.status === 'in_progress')?.name || '';
+      const completed = steps.filter(step => step.status === 'completed').length;
+      const total = Math.max(steps.length, 1);
+      let progress = Math.max(20, Math.min(94, Math.round(18 + completed / total * 76)));
+      let stage = current ? `GitHub Actions: ${current}` : 'جارٍ تجهيز بيئة البناء';
+      if (/Prepare Android/i.test(current)) { progress = 38; stage = 'جارٍ فحص الموقع وتجهيز مشروع Android'; }
+      if (/keystore/i.test(current)) { progress = 49; stage = 'جارٍ تجهيز مفتاح توقيع المشروع'; }
+      if (/Build signed/i.test(current)) { progress = 68; stage = 'جارٍ تجميع وتوقيع APK وAAB'; }
+      if (/Verify/i.test(current)) { progress = 86; stage = 'جارٍ التحقق من توقيع APK'; }
+      if (/Publish/i.test(current)) { progress = 94; stage = 'جارٍ نشر روابط التنزيل الخاصة'; }
+      return { progress, stage };
+    } catch (_) { return { progress: 50, stage: 'GitHub Actions يبني التطبيق الآن' }; }
+  }
+
+  function assetLink(asset) {
+    return asset ? { url: asset.url, name: asset.name, size: asset.size } : null;
+  }
+
+  async function completedBuild(record, run) {
+    const release = await request(`${repoPath()}/releases/tags/build-${encodeURIComponent(record.id)}`);
+    const assets = release.assets || [];
+    const apk = assets.find(asset => asset.name.endsWith('.apk'));
+    const aab = assets.find(asset => asset.name.endsWith('.aab'));
+    const signing = assets.find(asset => asset.name === 'signing-backup.zip');
+    const log = assets.find(asset => asset.name === 'build.log');
+    record.status = 'completed'; record.releaseId = release.id; saveJob(record);
+    return {
+      ...record, status: 'completed', progress: 100, stage: 'اكتمل البناء والتوقيع بنجاح',
+      error: null, accessToken: '', updatedAt: Math.floor(Date.now() / 1000),
+      links: { apk: assetLink(apk), aab: assetLink(aab), signing: assetLink(signing), log: assetLink(log), run: run.html_url }
+    };
+  }
+
+  async function getBuild(id) {
+    await ensureAuth();
+    const record = loadJob(id);
+    if (!record) throw new GitHubError('لم نجد بيانات عملية البناء على هذا الجهاز.');
+    let run = record.runId ? await request(`${repoPath()}/actions/runs/${record.runId}`) : await findRun(id);
+    if (!run) return { ...record, status: 'queued', progress: 12, stage: 'ننتظر ظهور Workflow في GitHub Actions', links: {}, accessToken: '' };
+    if (!record.runId) { record.runId = run.id; saveJob(record); }
+    if (run.status === 'completed') {
+      if (run.conclusion === 'success') return completedBuild(record, run);
+      record.status = 'failed'; saveJob(record);
+      return {
+        ...record, status: 'failed', progress: 0, stage: 'فشل بناء التطبيق',
+        error: `انتهى GitHub Actions بالحالة: ${run.conclusion || 'failed'}. افتح سجل Workflow لمعرفة الخطوة المتسببة.`,
+        accessToken: '', links: { run: run.html_url }, updatedAt: Math.floor(Date.now() / 1000)
+      };
+    }
+    const stage = await runStage(run);
+    return { ...record, status: run.status === 'in_progress' ? 'building' : 'queued', ...stage, accessToken: '', links: { run: run.html_url }, updatedAt: Math.floor(Date.now() / 1000) };
+  }
+
+  async function downloadAsset(link) {
+    if (!link?.url) throw new GitHubError('ملف التنزيل غير متاح');
+    await ensureAuth();
+    const response = await request(link.url, { accept: 'application/octet-stream', raw: true });
+    const blob = await response.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = objectUrl; anchor.download = link.name || 'download'; anchor.style.display = 'none';
+    document.body.appendChild(anchor); anchor.click(); anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+  }
+
+  function bindDownload(anchor, link) {
+    if (!anchor) return;
+    anchor.href = '#';
+    anchor.onclick = async event => {
+      event.preventDefault();
+      const original = anchor.firstChild?.textContent || anchor.textContent;
+      anchor.classList.add('downloading');
+      try { await downloadAsset(link); }
+      catch (error) { alert(error.message); }
+      finally { anchor.classList.remove('downloading'); if (anchor.firstChild) anchor.firstChild.textContent = original; }
+    };
+  }
+
+  async function health() {
+    if (String(config.owner).startsWith('__')) return { ok: false, configured: false, message: 'لم يتم ضبط اسم مالك مستودع GitHub في runtime-config.js.' };
+    return { ok: true, configured: true, connected: Boolean(token), owner: config.owner, repository: config.repository };
+  }
+
+  bindAuthUi();
+  window.Web2APKPages = Object.freeze({
+    config, ensureAuth, connectWithToken, disconnect, createBuild, getBuild, bindDownload, downloadAsset, health,
+    isConnected: () => Boolean(token && user), getUser: () => user
+  });
+})();

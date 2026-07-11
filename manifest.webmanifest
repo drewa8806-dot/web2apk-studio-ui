@@ -1,0 +1,12 @@
+{
+  "name": "Web2APK Studio",
+  "short_name": "Web2APK",
+  "description": "حوّل مواقع الويب إلى تطبيقات أندرويد",
+  "lang": "ar",
+  "dir": "rtl",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#070b15",
+  "theme_color": "#0a1020",
+  "icons": [{"src":"./assets/favicon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]
+}

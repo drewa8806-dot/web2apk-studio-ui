@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0a1020">
+  <meta name="description" content="حوّل موقعك أو مشروع الويب إلى APK وAAB موقّعين وجاهزين للتنزيل.">
+  <title>Web2APK Studio — حوّل موقعك إلى تطبيق</title>
+  <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="ambient ambient-one"></div><div class="ambient ambient-two"></div>
+  <header class="topbar">
+    <a class="brand" href="./" aria-label="Web2APK Studio">
+      <span class="brand-mark"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M11 8h18a4 4 0 0 1 4 4v16a4 4 0 0 1-4 4H11a4 4 0 0 1-4-4V12a4 4 0 0 1 4-4Z"/><path d="m15 15 5 5-5 5M22 25h5"/></svg></span>
+      <span><b>Web2APK</b><small>STUDIO</small></span>
+    </a>
+    <div class="header-badges"><button id="githubConnect" class="github-connect" type="button"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.69c-2.78.6-3.37-1.18-3.37-1.18-.45-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.61.07-.61 1 .07 1.53 1.03 1.53 1.03.9 1.53 2.35 1.09 2.92.83.09-.65.35-1.09.64-1.34-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.64 0 0 .84-.27 2.75 1.02A9.56 9.56 0 0 1 12 6.7c.85 0 1.71.11 2.51.34 1.91-1.29 2.75-1.02 2.75-1.02.55 1.37.2 2.39.1 2.64.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.86v2.77c0 .27.18.58.69.48A10 10 0 0 0 12 2Z"/></svg><span>ربط GitHub</span><i></i></button><span class="version-badge">Android 10—17</span></div>
+  </header>
+
+  <main class="page-shell">
+    <section class="intro">
+      <span class="eyebrow"><svg viewBox="0 0 24 24"><path d="m13 2-9 12h7l-1 8 9-12h-7l1-8Z"/></svg> بدون كتابة كود</span>
+      <h1>موقعك يصبح <span>تطبيق أندرويد</span><br>في خطوات بسيطة.</h1>
+      <p>أضف رابطاً أو ارفع مشروع الويب، اختر الهوية والأذونات، واحصل على APK وAAB موقّعين وجاهزين.</p>
+      <div class="trust-row"><span>✓ توقيع Release تلقائي</span><span>✓ مفتاح محفوظ للتحديثات</span><span>✓ بناء آمن عبر GitHub Actions</span></div>
+    </section>
+
+    <div id="serverNotice" class="notice hidden" role="alert"></div>
+
+    <section class="studio-layout">
+      <div class="wizard-card">
+        <nav class="steps" aria-label="خطوات إنشاء التطبيق">
+          <button class="step active" data-step="1"><span>1</span><b>المصدر</b><small>الرابط أو الملفات</small></button>
+          <i></i>
+          <button class="step" data-step="2"><span>2</span><b>الهوية</b><small>الاسم والتصميم</small></button>
+          <i></i>
+          <button class="step" data-step="3"><span>3</span><b>الأذونات</b><small>إمكانات التطبيق</small></button>
+          <i></i>
+          <button class="step" data-step="4"><span>4</span><b>البناء</b><small>المراجعة والتنزيل</small></button>
+        </nav>
+
+        <form id="builderForm" novalidate>
+          <section class="panel active" data-panel="1">
+            <div class="panel-heading"><div><span class="section-kicker">الخطوة الأولى</span><h2>من أين نبدأ؟</h2><p>استخدم رابط موقع منشور، أو ارفع ملفات موقعك في ZIP.</p></div><span class="heading-icon">⌁</span></div>
+            <div class="source-tabs" role="tablist">
+              <button type="button" class="source-tab active" data-source="url"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.1.1l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1M14 11a5 5 0 0 0-7.1-.1l-2 2A5 5 0 0 0 12 20l1.1-1.1"/></svg><span><b>رابط موقع</b><small>موقع يعمل على الإنترنت</small></span></button>
+              <button type="button" class="source-tab" data-source="zip"><svg viewBox="0 0 24 24"><path d="M4 4h6l2 2h8v14H4V4Z"/><path d="M12 9v7m-2-5h4m-4 3h4"/></svg><span><b>ملف ZIP</b><small>HTML أو React / Vue</small></span></button>
+            </div>
+            <input type="hidden" name="sourceType" id="sourceType" value="url">
+            <div id="urlSource" class="source-box">
+              <label class="field-label" for="url">رابط الموقع</label>
+              <div class="input-with-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/></svg><input id="url" name="url" type="url" inputmode="url" dir="ltr" placeholder="https://example.com"><button type="button" id="testUrl">فحص</button></div>
+              <p class="field-hint">يُفضّل استخدام HTTPS لضمان الأمان وعمل الكاميرا والموقع الجغرافي.</p>
+            </div>
+            <div id="zipSource" class="source-box hidden">
+              <input id="sourceZip" name="sourceZip" type="file" accept=".zip,application/zip" hidden>
+              <label for="sourceZip" id="dropZone" class="drop-zone">
+                <span class="upload-orb"><svg viewBox="0 0 24 24"><path d="M12 16V4m0 0L7 9m5-5 5 5M5 14v5h14v-5"/></svg></span>
+                <b>اسحب ملف ZIP هنا أو اضغط للاختيار</b><small>حتى 70MB — يدعم index.html ومشروعات React/Vue ذات أمر build</small>
+                <em id="zipFileName">لم يتم اختيار ملف</em>
+              </label>
+            </div>
+            <div class="info-strip"><svg viewBox="0 0 24 24"><path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20ZM12 10v7M12 7h.01"/></svg><span><b>مهم:</b> لا يمكن تحويل صور أو PDF أو ملفات عشوائية وحدها إلى تطبيق. يجب أن يحتوي ZIP على موقع ويب أو مشروع واجهة قابل للبناء.</span></div>
+          </section>
+
+          <section class="panel" data-panel="2">
+            <div class="panel-heading"><div><span class="section-kicker">الخطوة الثانية</span><h2>هوية تطبيقك</h2><p>اختر الاسم والحزمة والأيقونة وشاشة البداية.</p></div><span class="heading-icon">✦</span></div>
+            <div class="form-grid two">
+              <label class="field"><span class="field-label">اسم التطبيق</span><input id="appName" name="appName" maxlength="50" placeholder="مثال: متجري" required><small>سيظهر أسفل الأيقونة.</small></label>
+              <label class="field"><span class="field-label">اسم الحزمة</span><input id="packageName" name="packageName" dir="ltr" placeholder="com.company.app" pattern="[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+" required><small>لا يمكن تغييره بعد نشر التطبيق.</small></label>
+              <label class="field"><span class="field-label">الإصدار</span><input id="versionName" name="versionName" dir="ltr" value="1.0.0" required></label>
+              <label class="field"><span class="field-label">رقم البناء</span><input id="versionCode" name="versionCode" type="number" min="1" value="1" required></label>
+            </div>
+            <div class="asset-grid">
+              <div class="asset-card"><div class="asset-title"><span><b>أيقونة التطبيق</b><small>PNG / JPG / WebP</small></span><span class="recommended">512×512</span></div><input id="icon" name="icon" type="file" accept="image/png,image/jpeg,image/webp" hidden><label for="icon" class="asset-picker"><span id="iconPreview" class="icon-preview">W</span><span><b>اختر الأيقونة</b><small id="iconFileName">سيتم إنشاء أيقونة افتراضية</small></span></label></div>
+              <div class="asset-card"><div class="asset-title"><span><b>شاشة البداية</b><small>شعار شفاف أو صورة</small></span><span class="recommended">1200×1200</span></div><input id="splash" name="splash" type="file" accept="image/png,image/jpeg,image/webp" hidden><label for="splash" class="asset-picker"><span id="splashPreview" class="splash-preview">✦</span><span><b>اختر صورة Splash</b><small id="splashFileName">سيُستخدم شعار التطبيق</small></span></label></div>
+            </div>
+            <h3 class="subheading">الألوان والعرض</h3>
+            <div class="form-grid three">
+              <label class="color-field"><span>اللون الرئيسي</span><span><input id="primaryColorPicker" type="color" value="#6c63ff"><input id="primaryColor" name="primaryColor" value="#6C63FF" dir="ltr"></span></label>
+              <label class="color-field"><span>الخلفية</span><span><input id="backgroundColorPicker" type="color" value="#0b1020"><input id="backgroundColor" name="backgroundColor" value="#0B1020" dir="ltr"></span></label>
+              <label class="color-field"><span>شريط الحالة</span><span><input id="statusBarColorPicker" type="color" value="#0b1020"><input id="statusBarColor" name="statusBarColor" value="#0B1020" dir="ltr"></span></label>
+              <label class="field"><span class="field-label">اتجاه الشاشة</span><select id="orientation" name="orientation"><option value="unspecified">تلقائي ومتجاوب</option><option value="portrait">رأسي</option><option value="landscape">أفقي</option><option value="sensor">حسب المستشعر</option></select></label>
+              <label class="field"><span class="field-label">Target Android</span><select id="targetSdk" name="targetSdk"><option value="36">Android 16 (موصى به)</option><option value="37">Android 17</option></select></label>
+            </div>
+          </section>
+
+          <section class="panel" data-panel="3">
+            <div class="panel-heading"><div><span class="section-kicker">الخطوة الثالثة</span><h2>أذونات التطبيق</h2><p>فعّل فقط ما يحتاج إليه موقعك. سيطلب أندرويد الأذونات الحساسة وقت الاستخدام.</p></div><span class="heading-icon">⌾</span></div>
+            <div class="permissions-grid" id="permissionsGrid">
+              <label class="permission-card"><input type="checkbox" value="camera"><span class="permission-icon violet">◉</span><span><b>الكاميرا</b><small>رفع الصور ومسح QR</small></span><i></i></label>
+              <label class="permission-card"><input type="checkbox" value="microphone"><span class="permission-icon pink">♩</span><span><b>الميكروفون</b><small>التسجيل والمكالمات</small></span><i></i></label>
+              <label class="permission-card"><input type="checkbox" value="location"><span class="permission-icon cyan">⌖</span><span><b>الموقع الجغرافي</b><small>GPS والموقع التقريبي</small></span><i></i></label>
+              <label class="permission-card"><input type="checkbox" value="notifications"><span class="permission-icon amber">♢</span><span><b>الإشعارات</b><small>إشعارات النظام</small></span><i></i></label>
+              <label class="permission-card"><input type="checkbox" value="bluetooth"><span class="permission-icon blue">⌁</span><span><b>Bluetooth</b><small>الأجهزة القريبة</small></span><i></i></label>
+              <label class="permission-card"><input type="checkbox" value="contacts"><span class="permission-icon green">♧</span><span><b>جهات الاتصال</b><small>قراءة الأسماء والأرقام</small></span><i></i></label>
+              <label class="permission-card"><input type="checkbox" value="phone"><span class="permission-icon red">⌕</span><span><b>إجراء مكالمات</b><small>فتح الاتصال المباشر</small></span><i></i></label>
+              <label class="permission-card"><input type="checkbox" value="vibrate" checked><span class="permission-icon violet">≈</span><span><b>الاهتزاز</b><small>تنبيهات لمسية</small></span><i></i></label>
+              <label class="permission-card"><input type="checkbox" value="mediaImages"><span class="permission-icon cyan">▧</span><span><b>صور الجهاز</b><small>قراءة مكتبة الصور</small></span><i></i></label>
+              <label class="permission-card"><input type="checkbox" value="mediaVideo"><span class="permission-icon pink">▷</span><span><b>فيديو الجهاز</b><small>قراءة مكتبة الفيديو</small></span><i></i></label>
+              <label class="permission-card"><input type="checkbox" value="mediaAudio"><span class="permission-icon amber">♫</span><span><b>ملفات الصوت</b><small>قراءة مكتبة الصوت</small></span><i></i></label>
+            </div>
+            <h3 class="subheading">خيارات WebView</h3>
+            <div class="options-list">
+              <label><span><b>فتح الروابط الخارجية في المتصفح</b><small>تبقى روابط نفس الموقع داخل التطبيق.</small></span><input type="checkbox" id="externalLinks" checked><i></i></label>
+              <label><span><b>السماح باتصال ملفات ZIP بالإنترنت</b><small>مطلوب غالباً للاتصال بواجهات API، لكنه يقلل العزل الأمني.</small></span><input type="checkbox" id="allowFileNetwork" checked><i></i></label>
+              <label><span><b>السماح بروابط HTTP غير المشفرة</b><small>اتركه مغلقاً إلا إذا كان موقعك لا يدعم HTTPS.</small></span><input type="checkbox" id="allowCleartext"><i></i></label>
+            </div>
+          </section>
+
+          <section class="panel" data-panel="4">
+            <div class="panel-heading"><div><span class="section-kicker">الخطوة الأخيرة</span><h2>جاهز للبناء</h2><p>راجع البيانات ثم شغّل البناء السحابي.</p></div><span class="heading-icon">✓</span></div>
+            <div class="review-card" id="reviewCard"></div>
+            <div class="signing-note"><span>🔐</span><div><b>توقيع Release آلي وآمن</b><p>في أول بناء ننشئ مفتاح توقيع خاصاً بالمشروع. استخدم نفس المشروع لكل تحديث، ونزّل نسخة المفتاح واحفظها في مكان آمن.</p></div></div>
+            <label class="agreement"><input id="agreement" type="checkbox"><span>أؤكد أنني أملك حق استخدام المحتوى والاسم والصور، وأن الأذونات المختارة ضرورية لوظائف التطبيق.</span></label>
+            <button id="buildButton" class="build-button" type="submit"><span>إنشاء APK الآن</span><svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></button>
+            <p class="build-caption">عادةً يستغرق البناء من 3 إلى 8 دقائق حسب حجم المشروع وازدحام GitHub Actions.</p>
+          </section>
+
+          <div class="wizard-actions"><button type="button" id="prevButton" class="secondary-button hidden">السابق</button><span></span><button type="button" id="nextButton" class="primary-button">التالي <b>←</b></button></div>
+        </form>
+      </div>
+
+      <aside class="preview-column">
+        <div class="preview-head"><span><b>معاينة مباشرة</b><small>شكل تقريبي للتطبيق</small></span><i class="status-pill">LIVE</i></div>
+        <div class="phone" id="phonePreview">
+          <div class="phone-speaker"></div>
+          <div class="phone-screen" id="phoneScreen">
+            <div class="android-status"><span>10:24</span><span>▴ ◔ ▰</span></div>
+            <div class="app-bar" id="previewBar"><span class="tiny-app-icon" id="tinyIcon">W</span><b id="previewTitle">تطبيقي</b><span>⋮</span></div>
+            <div class="browser-content"><div class="fake-hero"><span id="previewLogo">W</span><b id="previewSiteTitle">موقعك هنا</b><small>واجهة موقعك ستظهر داخل التطبيق</small><i></i></div><div class="fake-row"><i></i><i></i></div><div class="fake-card"></div><div class="fake-card short"></div></div>
+            <div class="android-nav"><i></i><i></i><i></i></div>
+          </div>
+        </div>
+        <div class="preview-specs"><span><b>API</b><small>29—37</small></span><span><b>الصيغة</b><small>APK + AAB</small></span><span><b>التوقيع</b><small>Release</small></span></div>
+      </aside>
+    </section>
+  </main>
+
+  <footer><span>Web2APK Studio</span><span>منصة مفتوحة المصدر لتحويل مواقع الويب إلى تطبيقات أندرويد.</span></footer>
+
+  <div class="modal-backdrop hidden" id="githubAuthModal" role="dialog" aria-modal="true" aria-labelledby="githubAuthTitle">
+    <div class="build-modal auth-modal">
+      <button class="modal-close" id="authClose" type="button" aria-label="إغلاق">×</button>
+      <span class="github-auth-icon"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.69c-2.78.6-3.37-1.18-3.37-1.18-.45-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.61.07-.61 1 .07 1.53 1.03 1.53 1.03.9 1.53 2.35 1.09 2.92.83.09-.65.35-1.09.64-1.34-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.64 0 0 .84-.27 2.75 1.02A9.56 9.56 0 0 1 12 6.7c.85 0 1.71.11 2.51.34 1.91-1.29 2.75-1.02 2.75-1.02.55 1.37.2 2.39.1 2.64.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.86v2.77c0 .27.18.58.69.48A10 10 0 0 0 12 2Z"/></svg></span>
+      <span class="section-kicker">اتصال مباشر وآمن</span>
+      <h2 id="githubAuthTitle">اربط مستودع البناء</h2>
+      <p>أدخل Fine-grained Token محدوداً بمستودع الـBuilder. يبقى في ذاكرة هذه الصفحة فقط ويُحذف عند إغلاقها أو تحديثها.</p>
+      <label class="field auth-field"><span class="field-label">GitHub Token</span><input id="githubToken" type="password" autocomplete="off" spellcheck="false" dir="ltr" placeholder="github_pat_••••••••••••"></label>
+      <div class="token-permissions"><b>الصلاحيات المطلوبة للمستودع الخاص فقط:</b><span>Contents: Read and write</span><span>Actions: Read and write</span></div>
+      <div id="authError" class="auth-error hidden"></div>
+      <button id="authSubmit" class="build-button" type="button">اتصال بالمستودع</button>
+      <small class="keep-open">لا تضع Token داخل الكود أو GitHub Pages Secrets؛ أدخله هنا عند كل جلسة اختبار.</small>
+    </div>
+  </div>
+
+  <div class="modal-backdrop hidden" id="buildModal" role="dialog" aria-modal="true" aria-labelledby="buildModalTitle">
+    <div class="build-modal">
+      <button class="modal-close" id="modalClose" type="button" aria-label="إغلاق">×</button>
+      <div id="buildingView">
+        <div class="build-animation"><span class="ring"></span><span class="build-logo">A</span></div>
+        <span class="section-kicker">عملية البناء السحابي</span><h2 id="buildModalTitle">نجهّز تطبيقك الآن</h2><p id="buildStage">جارٍ إرسال الملفات...</p>
+        <div class="progress-track"><i id="progressBar"></i></div><b class="progress-number" id="progressNumber">0%</b>
+        <div class="build-timeline"><span class="active" data-status-step="queued"><i>✓</i> استلام الطلب</span><span data-status-step="prepare"><i>2</i> تجهيز المشروع</span><span data-status-step="compile"><i>3</i> بناء وتوقيع APK</span><span data-status-step="upload"><i>4</i> رفع الملفات</span></div>
+        <small class="keep-open">يمكنك إغلاق النافذة؛ سيبقى رقم العملية محفوظاً على هذا الجهاز.</small>
+      </div>
+      <div id="successView" class="hidden result-view success-view"><span class="result-icon">✓</span><h2>تطبيقك جاهز!</h2><p>تم بناء التطبيق وتوقيعه بنجاح.</p><div class="download-grid"><a id="downloadApk" class="download-primary" href="#">تنزيل APK <small>للتثبيت المباشر</small></a><a id="downloadAab" class="download-secondary hidden" href="#">تنزيل AAB <small>لـ Google Play</small></a><a id="downloadSigning" class="download-secondary" href="#">مفتاح التوقيع <small>احتفظ به للتحديثات</small></a></div><button id="newBuild" type="button" class="text-button">إنشاء تطبيق آخر</button></div>
+      <div id="failedView" class="hidden result-view failed-view"><span class="result-icon">!</span><h2>تعذر إكمال البناء</h2><p id="failureMessage">حدث خطأ غير متوقع.</p><a id="downloadLog" class="secondary-button hidden" href="#">تنزيل سجل الخطأ</a><button id="retryButton" type="button" class="primary-button">العودة وتعديل البيانات</button></div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status"></div>
+  <script src="./runtime-config.js"></script>
+  <script src="./github-runtime.js"></script>
+  <script src="./app.js" defer></script>
+</body>
+</html>
