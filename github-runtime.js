@@ -255,7 +255,7 @@
       source: { type: sourceType, url: sourceType === 'url' ? formData.get('url') : '', zip: sourceType === 'zip' ? 'source.zip' : null },
       app: {
         name: appName, packageName, versionName: formData.get('versionName'), versionCode: Number(formData.get('versionCode')),
-        minSdk: 29, compileSdk: 37, targetSdk: Number(formData.get('targetSdk')), orientation: formData.get('orientation')
+        minSdk: 29, compileSdk: 36, targetSdk: Number(formData.get('targetSdk')), orientation: formData.get('orientation')
       },
       design: {
         primaryColor: formData.get('primaryColor'), backgroundColor: formData.get('backgroundColor'),
