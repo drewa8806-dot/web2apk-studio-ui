@@ -137,6 +137,31 @@
     } catch (_) { notify('أدخل رابطاً صحيحاً أولاً'); }
   });
 
+  function setPhoneMode(mode) {
+    $('#phoneSplashPreview').classList.toggle('hidden', mode !== 'splash');
+    $('#phoneIconPreview').classList.toggle('hidden', mode !== 'icon');
+    $$('.phone-preview-controls button').forEach(button => button.classList.toggle('active', button.dataset.phoneMode === mode));
+  }
+
+  function openPhonePreview(mode) {
+    setPhoneMode(mode);
+    if (window.matchMedia('(max-width: 1080px)').matches) document.body.classList.add('phone-preview-open');
+  }
+
+  function setSplashPreviewBackground(image) {
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = 24; canvas.height = 24;
+      const context = canvas.getContext('2d', { willReadFrequently: true });
+      context.drawImage(image, 0, 0, 24, 24);
+      const data = context.getImageData(0, 0, 24, 24).data;
+      const points = [[1,1],[22,1],[1,22],[22,22],[12,1],[12,22]];
+      let red = 0, green = 0, blue = 0;
+      points.forEach(([x,y]) => { const index = (y * 24 + x) * 4; red += data[index]; green += data[index+1]; blue += data[index+2]; });
+      $('#phoneSplashPreview').style.backgroundColor = `rgb(${Math.round(red/points.length)},${Math.round(green/points.length)},${Math.round(blue/points.length)})`;
+    } catch (_) { $('#phoneSplashPreview').style.backgroundColor = $('#backgroundColor').value; }
+  }
+
   function imagePreview(input, preview, filename) {
     input.addEventListener('change', () => {
       const file = input.files[0];
@@ -147,25 +172,38 @@
       preview.textContent = '';
       filename.textContent = file.name;
       if (input.id === 'icon') {
-        $('#tinyIcon').style.backgroundImage = `url("${url}")`;
-        $('#tinyIcon').textContent = '';
-        $('#previewLogo').style.backgroundImage = `url("${url}")`;
-        $('#previewLogo').textContent = '';
+        for (const element of [$('#tinyIcon'), $('#previewLogo'), $('#launcherIcon')]) {
+          element.style.backgroundImage = `url("${url}")`;
+          element.textContent = '';
+        }
+        setPhoneMode('icon');
+      } else {
+        const image = $('#phoneSplashImage');
+        image.onload = () => setSplashPreviewBackground(image);
+        image.src = url;
+        $('#phoneSplashFallback').classList.add('hidden');
+        setPhoneMode('splash');
       }
     });
   }
   imagePreview($('#icon'), $('#iconPreview'), $('#iconFileName'));
   imagePreview($('#splash'), $('#splashPreview'), $('#splashFileName'));
+  $$('.phone-preview-controls button').forEach(button => button.addEventListener('click', () => setPhoneMode(button.dataset.phoneMode)));
+  $('#previewIconButton').addEventListener('click', () => openPhonePreview('icon'));
+  $('#previewSplashButton').addEventListener('click', () => openPhonePreview('splash'));
+  $('#closePhonePreview').addEventListener('click', () => document.body.classList.remove('phone-preview-open'));
 
   $('#appName').addEventListener('input', event => {
     const value = event.target.value.trim() || 'تطبيقي';
     $('#previewTitle').textContent = value;
     $('#previewSiteTitle').textContent = value;
+    $('#launcherAppName').textContent = value;
     const letter = value[0] || 'W';
     if (!$('#icon').files[0]) {
       $('#iconPreview').textContent = letter;
       $('#tinyIcon').textContent = letter;
       $('#previewLogo').textContent = letter;
+      $('#launcherIcon').textContent = letter;
     }
   });
 

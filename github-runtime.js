@@ -3,6 +3,7 @@
 
   const config = window.WEB2APK_CONFIG || {};
   const encoder = new TextEncoder();
+  const TOKEN_STORAGE_KEY = 'web2apk.github.token.v1';
   let token = '';
   let user = null;
   let authPromise = null;
@@ -75,7 +76,7 @@
     if (field) field.value = '';
   }
 
-  async function connectWithToken(value) {
+  async function connectWithToken(value, remember = false) {
     const nextToken = String(value || '').trim();
     if (!/^(github_pat_|ghp_|gho_|ghu_)[A-Za-z0-9_]+$/.test(nextToken)) {
       throw new GitHubError('صيغة Token غير صحيحة. استخدم Fine-grained Personal Access Token.');
@@ -86,11 +87,13 @@
       const repository = await request(repoPath());
       if (!repository.private) console.warn('Builder repository is public; private is recommended.');
       await request(`${repoPath()}/actions/workflows/${encodeURIComponent(config.workflow)}`);
+      if (remember) localStorage.setItem(TOKEN_STORAGE_KEY, nextToken);
       setConnected(true);
       return user;
     } catch (error) {
       token = '';
       user = null;
+      if (remember) localStorage.removeItem(TOKEN_STORAGE_KEY);
       setConnected(false);
       throw error;
     }
@@ -113,13 +116,25 @@
   function disconnect() {
     token = '';
     user = null;
+    localStorage.removeItem(TOKEN_STORAGE_KEY);
     setConnected(false);
+  }
+
+  async function restoreStoredToken() {
+    const saved = localStorage.getItem(TOKEN_STORAGE_KEY);
+    if (!saved) return;
+    try {
+      await connectWithToken(saved, true);
+    } catch (error) {
+      console.warn('Saved GitHub token is no longer valid:', error.message);
+      localStorage.removeItem(TOKEN_STORAGE_KEY);
+    }
   }
 
   function bindAuthUi() {
     $('#githubConnect')?.addEventListener('click', async () => {
       if (token) {
-        if (confirm('هل تريد قطع اتصال GitHub وحذف Token من ذاكرة الصفحة؟')) disconnect();
+        if (confirm('هل تريد قطع اتصال GitHub وحذف المفتاح المحفوظ من هذا المتصفح؟')) disconnect();
         return;
       }
       ensureAuth().catch(() => {});
@@ -134,7 +149,7 @@
       button.disabled = true;
       errorBox.classList.add('hidden');
       try {
-        const result = await connectWithToken($('#githubToken').value);
+        const result = await connectWithToken($('#githubToken').value, $('#githubRemember')?.checked !== false);
         closeAuth();
         authResolve?.(result);
       } catch (error) {
@@ -370,7 +385,9 @@
   }
 
   function assetLink(asset) {
-    return asset ? { url: asset.url, name: asset.name, size: asset.size } : null;
+    if (!asset) return null;
+    const direct = /\.(?:apk|aab)$/i.test(asset.name);
+    return { url: asset.url, browserUrl: asset.browser_download_url, name: asset.name, size: asset.size, direct };
   }
 
   async function completedBuild(record, run) {
@@ -421,7 +438,16 @@
   }
 
   function bindDownload(anchor, link) {
-    if (!anchor) return;
+    if (!anchor || !link) return;
+    if (link.direct && link.browserUrl) {
+      // Let GitHub's Content-Disposition response enter the browser download list.
+      // No fetch to api.github.com is made when the user taps APK/AAB.
+      anchor.href = link.browserUrl;
+      anchor.download = link.name || '';
+      anchor.rel = 'noreferrer';
+      anchor.onclick = null;
+      return;
+    }
     anchor.href = '#';
     anchor.onclick = async event => {
       event.preventDefault();
@@ -439,6 +465,7 @@
   }
 
   bindAuthUi();
+  restoreStoredToken();
   window.Web2APKPages = Object.freeze({
     config, ensureAuth, connectWithToken, disconnect, createBuild, getBuild, bindDownload, downloadAsset, health,
     isConnected: () => Boolean(token && user), getUser: () => user
