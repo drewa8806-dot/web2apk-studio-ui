@@ -29,7 +29,7 @@ jobs:
         run: |
           mkdir -p _site
           cp -R index.html styles.css app.js github-runtime.js runtime-config.js sw.js manifest.webmanifest assets _site/
-          sed -i "s/__GITHUB_OWNER__/${GITHUB_REPOSITORY_OWNER}/g" _site/runtime-config.js
+          grep -q "owner: 'drewa8806-dot'" _site/runtime-config.js
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site

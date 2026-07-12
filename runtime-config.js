@@ -1,6 +1,6 @@
 window.WEB2APK_CONFIG = Object.freeze({
   mode: 'github-pages',
-  owner: '__GITHUB_OWNER__',
+  owner: 'drewa8806-dot',
   repository: 'web2apk-studio-builder',
   branch: 'main',
   workflow: 'build-apk.yml',

@@ -36,7 +36,8 @@
     try {
       response = await fetch(url, { ...options, headers, cache: 'no-store' });
     } catch (error) {
-      throw new GitHubError('تعذر الاتصال بـ GitHub. تحقق من الإنترنت وسياسة المتصفح.', 0, error);
+      const host = (() => { try { return new URL(url).host; } catch (_) { return 'api.github.com'; } })();
+      throw new GitHubError(`تعذر الاتصال بـ ${host}. أوقف مانع التتبع لهذا الموقع وتحقق من السماح بطلبات GitHub API.`, 0, error);
     }
     if (!response.ok) {
       let detail = '';
@@ -278,27 +279,22 @@
     return { bundle, jobConfig, buildId, projectId, projectToken, appName, packageName };
   }
 
-  async function createInputRelease(job) {
-    return request(`${repoPath()}/releases`, {
-      method: 'POST',
-      json: {
-        tag_name: `job-${job.buildId}`,
-        target_commitish: config.branch || 'main',
-        name: `Input ${job.buildId}`,
-        body: 'Private temporary Web2APK input. It is deleted automatically after the workflow.',
-        draft: true,
-        prerelease: true
-      }
+  function blobToBase64(blob) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new GitHubError('تعذر قراءة حزمة البناء داخل المتصفح.'));
+      reader.onload = () => resolve(String(reader.result).split(',', 2)[1] || '');
+      reader.readAsDataURL(blob);
     });
   }
 
-  async function uploadBundle(release, bundle) {
-    const uploadUrl = release.upload_url.replace(/\{.*$/, '') + '?name=bundle.zip';
-    return request(uploadUrl, {
+  async function uploadBundleBlob(bundle) {
+    // uploads.github.com rejects browser CORS preflights. Git Blobs uses
+    // api.github.com, supports CORS, and accepts binary content as Base64.
+    const content = await blobToBase64(bundle);
+    return request(`${repoPath()}/git/blobs`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/zip' },
-      accept: 'application/vnd.github+json',
-      body: bundle
+      json: { content, encoding: 'base64' }
     });
   }
 
@@ -317,45 +313,39 @@
   async function createBuild(formData, priorProject) {
     await ensureAuth();
     const built = await buildBundle(formData, priorProject);
-    let inputRelease;
-    try {
-      inputRelease = await createInputRelease(built);
-      const asset = await uploadBundle(inputRelease, built.bundle);
-      const response = await request(`${repoPath()}/actions/workflows/${encodeURIComponent(config.workflow)}/dispatches`, {
-        method: 'POST',
-        json: {
-          ref: config.branch || 'main',
-          inputs: {
-            build_id: built.buildId,
-            job_release_id: String(inputRelease.id),
-            job_asset_id: String(asset.id)
-          }
-        },
-        raw: true
-      });
-      let dispatch = null;
-      if (response.status !== 204) dispatch = await response.json().catch(() => null);
-      const record = {
-        id: built.buildId, projectId: built.projectId, projectToken: built.projectToken,
-        appName: built.appName, packageName: built.packageName, runId: dispatch?.workflow_run_id || dispatch?.run_id || null,
-        inputReleaseId: inputRelease.id, createdAt: Date.now(), status: 'queued'
-      };
-      saveJob(record);
-      const projects = projectStore();
-      projects[built.packageName] = { id: built.projectId, token: built.projectToken, savedAt: Date.now() };
-      localStorage.setItem('web2apk.projects', JSON.stringify(projects));
-      return {
-        ...record, status: 'queued', progress: 9, stage: 'تم رفع الحزمة الخاصة وتشغيل GitHub Actions',
-        accessToken: '', links: {}, createdAt: Math.floor(record.createdAt / 1000), updatedAt: Math.floor(Date.now() / 1000)
-      };
-    } catch (error) {
-      if (inputRelease?.id) request(`${repoPath()}/releases/${inputRelease.id}`, { method: 'DELETE' }).catch(() => {});
-      throw error;
-    }
+    const blob = await uploadBundleBlob(built.bundle);
+
+    // Exact GitHub Repository Dispatch endpoint:
+    // POST /repos/{owner}/{repo}/dispatches
+    await request(`${repoPath()}/dispatches`, {
+      method: 'POST',
+      json: {
+        event_type: 'web2apk_build',
+        client_payload: {
+          build_id: built.buildId,
+          job_blob_sha: blob.sha
+        }
+      },
+      raw: true
+    });
+
+    const record = {
+      id: built.buildId, projectId: built.projectId, projectToken: built.projectToken,
+      appName: built.appName, packageName: built.packageName, runId: null,
+      jobBlobSha: blob.sha, createdAt: Date.now(), status: 'queued'
+    };
+    saveJob(record);
+    const projects = projectStore();
+    projects[built.packageName] = { id: built.projectId, token: built.projectToken, savedAt: Date.now() };
+    localStorage.setItem('web2apk.projects', JSON.stringify(projects));
+    return {
+      ...record, status: 'queued', progress: 9, stage: 'تم رفع الحزمة إلى GitHub وتشغيل Repository Dispatch',
+      accessToken: '', links: {}, createdAt: Math.floor(record.createdAt / 1000), updatedAt: Math.floor(Date.now() / 1000)
+    };
   }
 
   async function findRun(buildId) {
-    const result = await request(`${repoPath()}/actions/workflows/${encodeURIComponent(config.workflow)}/runs?event=workflow_dispatch&per_page=30`);
+    const result = await request(`${repoPath()}/actions/workflows/${encodeURIComponent(config.workflow)}/runs?event=repository_dispatch&per_page=30`);
     return (result.workflow_runs || []).find(run => String(run.display_title || '').includes(buildId)) || null;
   }
 

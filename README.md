@@ -1,6 +1,6 @@
 # Web2APK Studio Dashboard
 
-واجهة GitHub Pages عامة بلا أسرار. تتصل مباشرة بمستودع `web2apk-studio-builder` الخاص عبر GitHub REST API.
+واجهة GitHub Pages عامة بلا أسرار. تتصل مباشرة بمستودع `drewa8806-dot/web2apk-studio-builder` الخاص عبر GitHub REST API، وترفع الحزمة إلى Git Blobs ثم تستدعي المسار الدقيق `POST /repos/drewa8806-dot/web2apk-studio-builder/dispatches`.
 
 ## الأمان
 
