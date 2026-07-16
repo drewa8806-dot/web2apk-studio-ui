@@ -279,7 +279,8 @@
       },
       features: {
         permissions: [...androidPermissions], allowCleartext: asBool(formData.get('allowCleartext')),
-        allowFileNetwork: asBool(formData.get('allowFileNetwork')), externalLinks: asBool(formData.get('externalLinks'))
+        allowFileNetwork: asBool(formData.get('allowFileNetwork')), externalLinks: asBool(formData.get('externalLinks')),
+        webViewZoom: asBool(formData.get('webViewZoom')), desktopMode: asBool(formData.get('desktopMode'))
       },
       signing: { keyAlias: 'web2apk', strategy: 'github-secret-vault' }
     };

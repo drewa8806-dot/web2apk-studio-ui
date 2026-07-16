@@ -13,3 +13,6 @@
 .close-phone-preview{display:none;border:0;background:#1b2539;color:#c5ccda;width:31px;height:31px;border-radius:9px;font-size:20px;cursor:pointer}
 @media(max-width:1080px){body.phone-preview-open{overflow:hidden}body.phone-preview-open:after{content:"";position:fixed;inset:0;background:#02050be6;z-index:88;backdrop-filter:blur(7px)}body.phone-preview-open .preview-column{display:block;position:fixed;z-index:89;top:10px;right:50%;transform:translateX(50%);width:min(330px,calc(100vw - 20px));max-height:calc(100vh - 20px);overflow:auto}.close-phone-preview{display:block}.preview-head .status-pill{margin-inline-start:auto}}
 .phone-splash-layer img{position:absolute;inset:0;z-index:1}.phone-splash-layer>span{position:relative;z-index:2}
+/* Full-bleed icon and splash previews */
+.phone-splash-layer img{object-fit:cover}.launcher-app>span,.icon-preview,.tiny-app-icon,.fake-hero>span{background-size:cover!important;background-position:center!important}
+.launcher-app>span{border-radius:50%}

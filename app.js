@@ -162,6 +162,52 @@
     } catch (_) { $('#phoneSplashPreview').style.backgroundColor = $('#backgroundColor').value; }
   }
 
+  function applyFullBleedIconPreview(sourceUrl) {
+    const image = new Image();
+    image.onload = () => {
+      try {
+        const source = document.createElement('canvas');
+        source.width = image.naturalWidth; source.height = image.naturalHeight;
+        const sourceContext = source.getContext('2d', { willReadFrequently: true });
+        sourceContext.drawImage(image, 0, 0);
+        const pixels = sourceContext.getImageData(0, 0, source.width, source.height).data;
+        let left = source.width, top = source.height, right = -1, bottom = -1;
+        for (let y = 0; y < source.height; y++) {
+          for (let x = 0; x < source.width; x++) {
+            if (pixels[(y * source.width + x) * 4 + 3] > 12) {
+              left = Math.min(left, x); top = Math.min(top, y); right = Math.max(right, x); bottom = Math.max(bottom, y);
+            }
+          }
+        }
+        if (right < left) throw new Error('empty image');
+        const edgeColors = [];
+        const edgeSize = Math.max(2, Math.round(Math.min(right-left, bottom-top) * 0.08));
+        for (let y = top; y <= bottom; y++) for (let x = left; x <= right; x++) {
+          const index = (y * source.width + x) * 4;
+          if (pixels[index+3] > 160 && (x-left < edgeSize || right-x < edgeSize || y-top < edgeSize || bottom-y < edgeSize)) {
+            edgeColors.push([pixels[index], pixels[index+1], pixels[index+2]]);
+          }
+        }
+        edgeColors.sort((a,b) => (a[0]+a[1]+a[2]) - (b[0]+b[1]+b[2]));
+        const edge = edgeColors[Math.floor(edgeColors.length / 2)] || [108,99,255];
+        const output = document.createElement('canvas'); output.width = 512; output.height = 512;
+        const outputContext = output.getContext('2d');
+        outputContext.fillStyle = `rgb(${edge[0]},${edge[1]},${edge[2]})`;
+        outputContext.fillRect(0, 0, 512, 512);
+        outputContext.drawImage(source, left, top, right-left+1, bottom-top+1, 0, 0, 512, 512);
+        const url = output.toDataURL('image/png');
+        for (const element of [$('#iconPreview'), $('#tinyIcon'), $('#previewLogo'), $('#launcherIcon')]) {
+          element.style.backgroundImage = `url("${url}")`; element.textContent = '';
+        }
+      } catch (_) {
+        for (const element of [$('#iconPreview'), $('#tinyIcon'), $('#previewLogo'), $('#launcherIcon')]) {
+          element.style.backgroundImage = `url("${sourceUrl}")`; element.textContent = '';
+        }
+      }
+    };
+    image.src = sourceUrl;
+  }
+
   function imagePreview(input, preview, filename) {
     input.addEventListener('change', () => {
       const file = input.files[0];
@@ -172,10 +218,7 @@
       preview.textContent = '';
       filename.textContent = file.name;
       if (input.id === 'icon') {
-        for (const element of [$('#tinyIcon'), $('#previewLogo'), $('#launcherIcon')]) {
-          element.style.backgroundImage = `url("${url}")`;
-          element.textContent = '';
-        }
+        applyFullBleedIconPreview(url);
         setPhoneMode('icon');
       } else {
         const image = $('#phoneSplashImage');
@@ -241,6 +284,7 @@
       <div class="review-item"><i>✦</i><span><b>اسم التطبيق</b><small>${escapeHtml($('#appName').value)}</small></span></div>
       <div class="review-item"><i>◈</i><span><b>اسم الحزمة</b><small dir="ltr">${escapeHtml($('#packageName').value)}</small></span></div>
       <div class="review-item"><i>✓</i><span><b>دعم أندرويد</b><small dir="ltr">Android 10—17 · target ${escapeHtml($('#targetSdk').value)}</small></span></div>
+      <div class="review-item"><i>⌕</i><span><b>عرض WebView</b><small>${$('#desktopMode').checked ? 'وضع الكمبيوتر' : 'وضع الهاتف'} · ${$('#webViewZoom').checked ? 'التكبير مفعّل' : 'التكبير متوقف'}</small></span></div>
       <div class="review-item" style="grid-column:1/-1"><i>⌾</i><span><b>الأذونات المختارة</b><span class="permission-tags">${permissions.length ? permissions.map(p => `<i>${escapeHtml(permissionNames[p])}</i>`).join('') : '<small>الإنترنت فقط</small>'}</span></span></div>`;
   }
 
@@ -349,6 +393,7 @@
       orientation: $('#orientation').value, primaryColor: $('#primaryColor').value.toUpperCase(),
       backgroundColor: $('#backgroundColor').value.toUpperCase(), statusBarColor: $('#statusBarColor').value.toUpperCase(),
       targetSdk: $('#targetSdk').value, externalLinks: $('#externalLinks').checked,
+      webViewZoom: $('#webViewZoom').checked, desktopMode: $('#desktopMode').checked,
       allowFileNetwork: $('#allowFileNetwork').checked, allowCleartext: $('#allowCleartext').checked
     };
     Object.entries(values).forEach(([key, value]) => data.append(key, String(value)));

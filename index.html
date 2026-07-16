@@ -77,7 +77,7 @@
             </div>
             <div class="asset-grid">
               <div class="asset-card"><div class="asset-title"><span><b>أيقونة التطبيق</b><small>PNG / JPG / WebP</small></span><span class="recommended">512×512</span></div><input id="icon" name="icon" type="file" accept="image/png,image/jpeg,image/webp" hidden><label for="icon" class="asset-picker"><span id="iconPreview" class="icon-preview">W</span><span><b>اختر الأيقونة</b><small id="iconFileName">سيتم إنشاء أيقونة افتراضية</small></span></label><button id="previewIconButton" class="asset-preview-button" type="button">◉ معاينة الأيقونة على الهاتف</button></div>
-              <div class="asset-card"><div class="asset-title"><span><b>شاشة البداية</b><small>صورة كاملة بدون قص</small></span><span class="recommended">1080×1920</span></div><input id="splash" name="splash" type="file" accept="image/png,image/jpeg,image/webp" hidden><label for="splash" class="asset-picker"><span id="splashPreview" class="splash-preview">✦</span><span><b>اختر صورة Splash</b><small id="splashFileName">سيُستخدم شعار التطبيق</small></span></label><button id="previewSplashButton" class="asset-preview-button" type="button">▣ معاينة Splash بكامل الشاشة</button></div>
+              <div class="asset-card"><div class="asset-title"><span><b>شاشة البداية</b><small>تملأ الشاشة بالكامل (Center Crop)</small></span><span class="recommended">1080×1920</span></div><input id="splash" name="splash" type="file" accept="image/png,image/jpeg,image/webp" hidden><label for="splash" class="asset-picker"><span id="splashPreview" class="splash-preview">✦</span><span><b>اختر صورة Splash</b><small id="splashFileName">سيُستخدم شعار التطبيق</small></span></label><button id="previewSplashButton" class="asset-preview-button" type="button">▣ معاينة Splash بكامل الشاشة</button></div>
             </div>
             <h3 class="subheading">الألوان والعرض</h3>
             <div class="form-grid three">
@@ -106,6 +106,8 @@
             </div>
             <h3 class="subheading">خيارات WebView</h3>
             <div class="options-list">
+              <label><span><b>تكبير وتصغير WebView</b><small>يسمح للمستخدم بالتكبير بإصبعيه مثل المتصفح، ويمكن إيقافه.</small></span><input type="checkbox" id="webViewZoom" checked><i></i></label>
+              <label><span><b>وضع الكمبيوتر (Desktop Mode)</b><small>يفتح الموقع بهوية ومتّسع عرض متصفح كمبيوتر بدلاً من نسخة الهاتف.</small></span><input type="checkbox" id="desktopMode"><i></i></label>
               <label><span><b>فتح الروابط الخارجية في المتصفح</b><small>تبقى روابط نفس الموقع داخل التطبيق.</small></span><input type="checkbox" id="externalLinks" checked><i></i></label>
               <label><span><b>السماح باتصال ملفات ZIP بالإنترنت</b><small>مطلوب غالباً للاتصال بواجهات API، لكنه يقلل العزل الأمني.</small></span><input type="checkbox" id="allowFileNetwork" checked><i></i></label>
               <label><span><b>السماح بروابط HTTP غير المشفرة</b><small>اتركه مغلقاً إلا إذا كان موقعك لا يدعم HTTPS.</small></span><input type="checkbox" id="allowCleartext"><i></i></label>
