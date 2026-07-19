@@ -383,7 +383,10 @@
     if (!$('#agreement').checked) { notify('يرجى تأكيد ملكية المحتوى وضرورة الأذونات'); return; }
     const buildButton = $('#buildButton');
     buildButton.disabled = true;
-    showBuildModal('building'); setProgress(4, pagesRuntime ? 'جارٍ تجهيز الحزمة الخاصة ورفعها إلى GitHub...' : 'جارٍ رفع البيانات إلى الخادم...');
+    showBuildModal('building');
+    setProgress(4, pagesRuntime
+      ? (navigator.onLine ? 'جارٍ تجهيز الحزمة الخاصة ورفعها إلى GitHub...' : 'جارٍ تجهيز الحزمة وحفظها محلياً على جهازك...')
+      : 'جارٍ رفع البيانات إلى الخادم...');
 
     const data = new FormData();
     const values = {
@@ -434,9 +437,14 @@
       notice.classList.remove('hidden');
       if (!health.configured) {
         notice.textContent = health.message;
+      } else if (!navigator.onLine) {
+        notice.classList.remove('serverless-badge');
+        notice.classList.add('offline-queue-note');
+        notice.textContent = 'وضع Offline فعّال: الواجهة والمعاينة والملفات محلية بالكامل. يمكنك تجهيز طلب البناء الآن وسيُحفظ على جهازك حتى عودة الإنترنت.';
       } else {
+        notice.classList.remove('offline-queue-note');
         notice.classList.add('serverless-badge');
-        notice.textContent = `وضع Serverless فعّال: تُرسل الحزم مباشرةً إلى ${health.owner}/${health.repository} وتُبنى عبر GitHub Actions. اربط GitHub لبدء الاختبار.`;
+        notice.textContent = `وضع Serverless فعّال: تُرسل الحزم مباشرةً إلى ${health.owner}/${health.repository} وتُبنى عبر GitHub Actions. الواجهة نفسها متاحة بلا إنترنت.`;
       }
       return;
     }
@@ -465,6 +473,6 @@
   }
 
   checkHealth();
-  setTimeout(resumeBuild, 600);
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
+  window.addEventListener('web2apk:network', checkHealth);
+  setTimeout(resumeBuild, 2300);
 })();

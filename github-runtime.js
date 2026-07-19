@@ -4,8 +4,12 @@
   const config = window.WEB2APK_CONFIG || {};
   const encoder = new TextEncoder();
   const TOKEN_STORAGE_KEY = 'web2apk.github.token.v1';
+  const QUEUE_DB_NAME = 'web2apk-offline-builds';
+  const QUEUE_STORE = 'queue';
   let token = '';
   let user = null;
+  let queueDbPromise = null;
+  let flushingQueue = false;
   let authPromise = null;
   let authResolve = null;
   let authReject = null;
@@ -89,11 +93,12 @@
       await request(`${repoPath()}/actions/workflows/${encodeURIComponent(config.workflow)}`);
       if (remember) localStorage.setItem(TOKEN_STORAGE_KEY, nextToken);
       setConnected(true);
+      setTimeout(() => flushQueuedBuilds().catch(error => console.warn('Queue flush failed:', error)), 0);
       return user;
     } catch (error) {
       token = '';
       user = null;
-      if (remember) localStorage.removeItem(TOKEN_STORAGE_KEY);
+      if (remember && !(error instanceof GitHubError && error.status === 0)) localStorage.removeItem(TOKEN_STORAGE_KEY);
       setConnected(false);
       throw error;
     }
@@ -122,12 +127,12 @@
 
   async function restoreStoredToken() {
     const saved = localStorage.getItem(TOKEN_STORAGE_KEY);
-    if (!saved) return;
+    if (!saved || !navigator.onLine) return;
     try {
       await connectWithToken(saved, true);
     } catch (error) {
-      console.warn('Saved GitHub token is no longer valid:', error.message);
-      localStorage.removeItem(TOKEN_STORAGE_KEY);
+      console.warn('Saved GitHub session could not be restored:', error.message);
+      if (!(error instanceof GitHubError && error.status === 0)) localStorage.removeItem(TOKEN_STORAGE_KEY);
     }
   }
 
@@ -326,9 +331,64 @@
     try { return JSON.parse(localStorage.getItem('web2apk.pages.jobs') || '{}')[id] || null; } catch (_) { return null; }
   }
 
-  async function createBuild(formData, priorProject) {
-    await ensureAuth();
-    const built = await buildBundle(formData, priorProject);
+  function openQueueDb() {
+    if (queueDbPromise) return queueDbPromise;
+    queueDbPromise = new Promise((resolve, reject) => {
+      if (!('indexedDB' in window)) return reject(new GitHubError('هذا المتصفح لا يدعم حفظ عمليات البناء بلا إنترنت.'));
+      const request = indexedDB.open(QUEUE_DB_NAME, 1);
+      request.onupgradeneeded = () => {
+        const database = request.result;
+        if (!database.objectStoreNames.contains(QUEUE_STORE)) database.createObjectStore(QUEUE_STORE, { keyPath: 'id' });
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(new GitHubError('تعذر فتح التخزين المحلي لطلبات البناء.'));
+    });
+    return queueDbPromise;
+  }
+
+  async function queueOperation(mode, action) {
+    const database = await openQueueDb();
+    return new Promise((resolve, reject) => {
+      const transaction = database.transaction(QUEUE_STORE, mode);
+      const store = transaction.objectStore(QUEUE_STORE);
+      const request = action(store);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(new GitHubError('تعذر حفظ عملية البناء محلياً. قد تكون مساحة الجهاز ممتلئة.'));
+    });
+  }
+
+  const queuePut = item => queueOperation('readwrite', store => store.put(item));
+  const queueGet = id => queueOperation('readonly', store => store.get(id));
+  const queueDelete = id => queueOperation('readwrite', store => store.delete(id));
+  const queueAll = () => queueOperation('readonly', store => store.getAll());
+
+  function rememberProject(built) {
+    const projects = projectStore();
+    projects[built.packageName] = { id: built.projectId, token: built.projectToken, savedAt: Date.now() };
+    localStorage.setItem('web2apk.projects', JSON.stringify(projects));
+  }
+
+  function buildPayload(record, progress, stage) {
+    return {
+      ...record, progress, stage, accessToken: '', links: {},
+      createdAt: Math.floor(record.createdAt / 1000), updatedAt: Math.floor(Date.now() / 1000)
+    };
+  }
+
+  async function queueBuiltApp(built, reason = 'offline') {
+    const record = {
+      id: built.buildId, projectId: built.projectId, projectToken: built.projectToken,
+      appName: built.appName, packageName: built.packageName, runId: null,
+      createdAt: Date.now(), status: 'offline_queued', offlineReason: reason
+    };
+    await queuePut({ id: built.buildId, built, queuedAt: Date.now() });
+    saveJob(record);
+    rememberProject(built);
+    window.dispatchEvent(new CustomEvent('web2apk:queue-change', { detail: { id: record.id, status: record.status } }));
+    return buildPayload(record, 6, 'تم حفظ المشروع على جهازك — سيُرسل تلقائياً عند عودة الإنترنت');
+  }
+
+  async function submitBuiltApp(built) {
     const blob = await uploadBundleBlob(built.bundle);
 
     // Exact GitHub Repository Dispatch endpoint:
@@ -351,13 +411,40 @@
       jobBlobSha: blob.sha, createdAt: Date.now(), status: 'queued'
     };
     saveJob(record);
-    const projects = projectStore();
-    projects[built.packageName] = { id: built.projectId, token: built.projectToken, savedAt: Date.now() };
-    localStorage.setItem('web2apk.projects', JSON.stringify(projects));
-    return {
-      ...record, status: 'queued', progress: 9, stage: 'تم رفع الحزمة إلى GitHub وتشغيل Repository Dispatch',
-      accessToken: '', links: {}, createdAt: Math.floor(record.createdAt / 1000), updatedAt: Math.floor(Date.now() / 1000)
-    };
+    rememberProject(built);
+    await queueDelete(built.buildId).catch(() => {});
+    window.dispatchEvent(new CustomEvent('web2apk:queue-change', { detail: { id: record.id, status: record.status } }));
+    return buildPayload(record, 9, 'تم رفع الحزمة إلى GitHub وتشغيل Repository Dispatch');
+  }
+
+  async function createBuild(formData, priorProject) {
+    const built = await buildBundle(formData, priorProject);
+    if (!navigator.onLine) return queueBuiltApp(built, 'offline');
+    await ensureAuth();
+    try {
+      return await submitBuiltApp(built);
+    } catch (error) {
+      if (error instanceof GitHubError && error.status === 0) return queueBuiltApp(built, 'network-error');
+      throw error;
+    }
+  }
+
+  async function flushQueuedBuilds() {
+    if (flushingQueue || !navigator.onLine || !token || !user) return;
+    flushingQueue = true;
+    try {
+      const items = await queueAll();
+      for (const item of items) {
+        try {
+          await submitBuiltApp(item.built);
+        } catch (error) {
+          if (error instanceof GitHubError && error.status === 0) break;
+          console.warn(`Queued build ${item.id} could not be submitted:`, error);
+        }
+      }
+    } finally {
+      flushingQueue = false;
+    }
   }
 
   async function findRun(buildId) {
@@ -407,9 +494,25 @@
   }
 
   async function getBuild(id) {
-    await ensureAuth();
-    const record = loadJob(id);
+    let record = loadJob(id);
     if (!record) throw new GitHubError('لم نجد بيانات عملية البناء على هذا الجهاز.');
+
+    if (record.status === 'offline_queued') {
+      if (!navigator.onLine) {
+        return buildPayload(record, 6, 'المشروع محفوظ محلياً — في انتظار عودة الإنترنت');
+      }
+      if (!token || !user) {
+        return buildPayload(record, 7, 'عاد الإنترنت — اربط GitHub لإرسال عملية البناء المحفوظة');
+      }
+      await flushQueuedBuilds();
+      record = loadJob(id) || record;
+      if (record.status === 'offline_queued') return buildPayload(record, 7, 'جارٍ إرسال عملية البناء المحفوظة');
+    }
+
+    if (!navigator.onLine) {
+      return buildPayload(record, Math.max(10, record.progress || 10), 'الواجهة تعمل بلا إنترنت — سنستأنف متابعة GitHub عند الاتصال');
+    }
+    await ensureAuth();
     let run = record.runId ? await request(`${repoPath()}/actions/runs/${record.runId}`) : await findRun(id);
     if (!run) return { ...record, status: 'queued', progress: 12, stage: 'ننتظر ظهور Workflow في GitHub Actions', links: {}, accessToken: '' };
     if (!record.runId) { record.runId = run.id; saveJob(record); }
@@ -467,8 +570,13 @@
 
   bindAuthUi();
   restoreStoredToken();
+  window.addEventListener('online', async () => {
+    if ((!token || !user) && localStorage.getItem(TOKEN_STORAGE_KEY)) await restoreStoredToken();
+    flushQueuedBuilds().catch(error => console.warn('Queue flush failed:', error));
+  });
   window.Web2APKPages = Object.freeze({
     config, ensureAuth, connectWithToken, disconnect, createBuild, getBuild, bindDownload, downloadAsset, health,
+    flushQueuedBuilds, queueAll,
     isConnected: () => Boolean(token && user), getUser: () => user
   });
 })();
