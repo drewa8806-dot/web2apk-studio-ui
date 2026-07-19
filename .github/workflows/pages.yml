@@ -28,7 +28,7 @@ jobs:
       - name: Prepare static dashboard
         run: |
           mkdir -p _site
-          cp -R index.html styles.css app.js github-runtime.js runtime-config.js sw.js manifest.webmanifest assets _site/
+          cp -R index.html styles.css app.js offline-shell.js github-runtime.js runtime-config.js sw.js manifest.webmanifest assets _site/
           grep -q "owner: 'drewa8806-dot'" _site/runtime-config.js
       - uses: actions/upload-pages-artifact@v3
         with:
